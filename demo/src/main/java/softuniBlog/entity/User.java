@@ -2,6 +2,7 @@ package softuniBlog.entity;
 
 import javax.persistence.*;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 @Entity
@@ -28,12 +29,15 @@ public class User {
 
     private Set<Role> roles;
 
+    private Set<Article> articles;
+
     public User(String email, String fullName, String password){
         this.email = email;
         this.fullName = fullName;
         this.password = password;
 
         this.roles = new HashSet<>();
+        this.articles = new HashSet<>();
     }
 
     @Id
@@ -73,12 +77,31 @@ public class User {
         this.password = password;
     }
 
+    @OneToMany(mappedBy = "author")
+    public Set<Article> getArticles() {
+        return articles;
+    }
+
+    public void setArticles(Set<Article> articles) {
+        this.articles = articles;
+    }
+
     public User(){
 
     }
 
     public void addRole(Role role) {
         this.roles.add(role);
+    }
+
+    @Transient
+    public boolean isAdmin(){
+        return this.getRoles().stream().anyMatch(role -> role.getName().equals("ROLE_ADMIN"));
+    }
+
+    @Transient
+    public boolean isAuthor(Article article){
+        return Objects.equals(this.getId(), article.getAuthor().getId());
     }
 
 

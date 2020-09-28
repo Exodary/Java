@@ -1,6 +1,7 @@
 package softuniBlog.entity;
 
 import org.springframework.context.annotation.EnableLoadTimeWeaving;
+import org.springframework.util.StringUtils;
 
 import javax.persistence.*;
 import java.util.HashSet;
@@ -46,6 +47,11 @@ public class Role {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    @Transient
+    public String getSimpleName(){
+        return StringUtils.capitalize(this.getName().substring(5).toLowerCase());
     }
 
 }
