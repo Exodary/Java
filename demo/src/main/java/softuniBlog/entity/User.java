@@ -86,6 +86,17 @@ public class User {
         this.articles = articles;
     }
 
+    @Column(name = "photo", nullable = false)
+    private String photo;
+
+    public String getPhoto() {
+        return photo;
+    }
+
+    public void setPhoto(String photo) {
+        this.photo = photo;
+    }
+
     public User(){
 
     }
@@ -104,5 +115,11 @@ public class User {
         return Objects.equals(this.getId(), article.getAuthor().getId());
     }
 
+    @Transient
+    public String getPhotosImagePath() {
+        if (photo == null || fullName == null) return null;
+
+        return "/user-photos/" + fullName + "/" + photo;
+    }
 
 }

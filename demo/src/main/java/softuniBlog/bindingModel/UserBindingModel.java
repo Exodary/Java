@@ -15,6 +15,17 @@ public class UserBindingModel {
     @NotNull
     private String confirmPassword;
 
+    @NotNull
+    private String photo;
+
+    public String getPhoto() {
+        return photo;
+    }
+
+    public void setPhoto(String photo) {
+        this.photo = photo;
+    }
+
     public String getEmail() {
         return email;
     }
