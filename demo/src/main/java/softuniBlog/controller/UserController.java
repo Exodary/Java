@@ -2,6 +2,7 @@ package softuniBlog.controller;
 
 import org.apache.tomcat.util.http.fileupload.FileUpload;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mail.SimpleMailMessage;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -13,14 +14,18 @@ import org.springframework.ui.Model;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.ModelAndView;
 import softuniBlog.Utils.FileUploadUtil;
 import softuniBlog.bindingModel.UserBindingModel;
 import softuniBlog.entity.Article;
+import softuniBlog.entity.ConfirmationToken;
 import softuniBlog.entity.Role;
 import softuniBlog.entity.User;
 import softuniBlog.repository.ArticleRepository;
+import softuniBlog.repository.ConfirmationTokenRepository;
 import softuniBlog.repository.RoleRepository;
 import softuniBlog.repository.UserRepository;
+import softuniBlog.service.EmailSenderService;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -46,6 +51,12 @@ public class UserController {
 
     @Autowired
     ArticleRepository articleRepository;
+
+    @Autowired
+    ConfirmationTokenRepository confirmationTokenRepository;
+
+    @Autowired
+    EmailSenderService emailSenderService;
 
     @GetMapping("/register")
     public String register(Model model){
@@ -131,10 +142,90 @@ public class UserController {
 
         List<Article> articles = this.articleRepository.findAll();
 
-        System.out.println(articles);
-
         model.addAttribute("user", user);
         model.addAttribute("view", "user/profile");
+
+        return "base-layout";
+    }
+
+    /**
+     * Display the forgot password page and form
+     */
+
+    @RequestMapping(value="/forgot-password", method=RequestMethod.GET)
+    public String displayResetPassword(Model model, User user) {
+        model.addAttribute("user", user);
+        model.addAttribute("view", "user/forgotPassword");
+
+        return "base-layout";
+    }
+
+    @RequestMapping(value="/forgot-password", method=RequestMethod.POST)
+    public String forgotUserPassword(Model model, User user) {
+        User existingUser = userRepository.findByEmail(user.getEmail());
+        if(existingUser != null) {
+            // create token
+            ConfirmationToken confirmationToken = new ConfirmationToken(existingUser);
+
+            // save it
+            confirmationTokenRepository.save(confirmationToken);
+
+            // create the email
+            SimpleMailMessage mailMessage = new SimpleMailMessage();
+            mailMessage.setTo(existingUser.getEmail());
+            mailMessage.setSubject("Complete Password Reset!");
+            mailMessage.setFrom("Satagon123@mail.bg");
+            mailMessage.setText("To complete the password reset process, please click here: "
+                    +"http://localhost:8080/confirm-reset?token="+confirmationToken.getConfirmationToken());
+
+            emailSenderService.sendEmail(mailMessage);
+
+            model.addAttribute("message", "Request to reset password received. Check your inbox for the reset link.");
+            model.addAttribute("view", "user/SuccessForgotPassword");
+
+        } else {
+            model.addAttribute("message", "This email does not exist!");
+            model.addAttribute("view", "user/forgotPassword");
+        }
+
+        return "base-layout";
+    }
+
+    @RequestMapping(value="/confirm-reset", method= {RequestMethod.GET, RequestMethod.POST})
+    public String validateResetToken(Model model, @RequestParam("token")String confirmationToken)
+    {
+        ConfirmationToken token = confirmationTokenRepository.findByConfirmationToken(confirmationToken);
+
+        if(token != null) {
+            User user = userRepository.findByEmail(token.getUser().getEmail());
+            userRepository.save(user);
+            model.addAttribute("user", user);
+            model.addAttribute("emailId", user.getEmail());
+            model.addAttribute("view", "user/resetPassword");
+        }
+        else{
+            model.addAttribute("message", "The link is invalid or broken!");
+            model.addAttribute("view","error/error");
+        }
+        return "base-layout";
+    }
+
+    @RequestMapping(value = "/reset-password", method = RequestMethod.POST)
+    public String resetUserPassword(Model model, User user) {
+
+        if (user.getEmail() != null) {
+            // use email to find user
+            User tokenUser = userRepository.findByEmail(user.getEmail());
+            BCryptPasswordEncoder bCryptPasswordEncoder = new BCryptPasswordEncoder();
+            tokenUser.setPassword(bCryptPasswordEncoder.encode(user.getPassword()));
+            // System.out.println(tokenUser.getPassword());
+            userRepository.save(tokenUser);
+            model.addAttribute("message", "Password successfully reset. You can now log in with the new credentials.");
+            model.addAttribute("view", "user/successResetPassword");
+        } else {
+            model.addAttribute("message", "The link is invalid or broken!");
+            model.addAttribute("view", "error/error");
+        }
 
         return "base-layout";
     }
