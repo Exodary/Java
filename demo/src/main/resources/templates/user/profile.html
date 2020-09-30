@@ -8,6 +8,32 @@
                     <span th:text="${user.fullName}"></span>
                     <br/>
                     <span><img th:src="@{${user.photosImagePath}}" /></span>
+                    <br/>
+                    <div class="row">
+                        <th:block th:each="article : ${user.getArticles()}">
+                            <div class="col-md-6">
+                                <article>
+                                    <header>
+                                        <h2 th:text="${article.title}"></h2>
+                                    </header>
+                                    <p th:text="${article.summary}"></p>
+                                    <small class="author"
+                                           th:text="${article.author.fullName}"></small>
+                                    <p>
+                                        <a class="btn btn-default btn-xs" th:each="tag:${article.tags}"
+                                           th:href="@{/tag/{name}(name=${tag.name})}" th:text="${tag.name}"></a>
+                                    </p>
+                                    <footer>
+                                        <div class="pull-right">
+                                            <a class="btn btn-default btn-xs"
+
+                                               th:href="@{/article/{id}(id=${article.id})}">Read more &raquo;</a>
+                                        </div>
+                                    </footer>
+                                </article>
+                            </div>
+                        </th:block>
+                    </div>
                 </div>
             </div>
         </div>

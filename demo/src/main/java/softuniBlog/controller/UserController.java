@@ -15,8 +15,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import softuniBlog.Utils.FileUploadUtil;
 import softuniBlog.bindingModel.UserBindingModel;
+import softuniBlog.entity.Article;
 import softuniBlog.entity.Role;
 import softuniBlog.entity.User;
+import softuniBlog.repository.ArticleRepository;
 import softuniBlog.repository.RoleRepository;
 import softuniBlog.repository.UserRepository;
 
@@ -28,6 +30,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
 
 @Controller
 public class UserController {
@@ -37,6 +43,9 @@ public class UserController {
 
     @Autowired
     UserRepository userRepository;
+
+    @Autowired
+    ArticleRepository articleRepository;
 
     @GetMapping("/register")
     public String register(Model model){
@@ -119,6 +128,10 @@ public class UserController {
                 .getPrincipal();
 
         User user = this.userRepository.findByEmail(principal.getUsername());
+
+        List<Article> articles = this.articleRepository.findAll();
+
+        System.out.println(articles);
 
         model.addAttribute("user", user);
         model.addAttribute("view", "user/profile");
