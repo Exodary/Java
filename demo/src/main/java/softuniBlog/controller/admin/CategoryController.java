@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import softuniBlog.bindingModel.CategoryBindingModel;
 import softuniBlog.entity.Article;
 import softuniBlog.entity.Category;
-import softuniBlog.repository.ArticleRepository;
-import softuniBlog.repository.CategoryRepository;
+import softuniBlog.service.ArticleService;
+import softuniBlog.service.CategoryService;
 
 import java.util.Comparator;
 import java.util.List;
@@ -22,22 +22,24 @@ import java.util.stream.Collectors;
 @RequestMapping("/admin/categories")
 public class CategoryController {
 
-    @Autowired
-    private CategoryRepository categoryRepository;
+    private final CategoryService categoryService;
+
+    private final ArticleService articleService;
 
     @Autowired
-    private ArticleRepository articleRepository;
+    public CategoryController(CategoryService categoryService, ArticleService articleService) {
+        this.categoryService = categoryService;
+        this.articleService = articleService;
+    }
 
 
     @GetMapping("/")
     public String list(Model model){
         model.addAttribute("view", "admin/category/list");
 
-        List<Category> categories = this.categoryRepository.findAll();
+        List<Category> categories = this.categoryService.findAllCategories();
 
-        categories = categories.stream()
-                .sorted(Comparator.comparingInt(Category::getId))
-                .collect(Collectors.toList());
+        this.categoryService.listCategories(categories);
 
         model.addAttribute("categories", categories);
 
@@ -57,20 +59,20 @@ public class CategoryController {
             return "redirect:/admin/categories/create";
         }
 
-        Category category = new Category(categoryBindingModel.getName());
+        Category category = this.categoryService.createCategory(categoryBindingModel.getName());
 
-        this.categoryRepository.saveAndFlush(category);
+        this.categoryService.saveAndFlushCategoryData(category);
 
         return "redirect:/admin/categories/";
     }
 
     @GetMapping("/edit/{id}")
     public String edit(Model model, @PathVariable Integer id){
-        if(this.categoryRepository.findById(id).orElse(null) == null){
+        if(this.categoryService.findById(id).orElse(null) == null){
             return "redirect:/admin/categories/";
         }
 
-        Category category = this.categoryRepository.findById(id).orElse(null);
+        Category category = this.categoryService.findById(id).orElse(null);
 
         model.addAttribute("category", category);
         model.addAttribute("view", "admin/category/edit");
@@ -82,26 +84,26 @@ public class CategoryController {
     public String editProcess(@PathVariable Integer id,
                               CategoryBindingModel categoryBindingModel){
 
-        if(this.categoryRepository.findById(id).orElse(null) == null){
+        if(this.categoryService.findById(id).orElse(null) == null){
             return "redirect:/admin/categories/";
         }
 
-        Category category = this.categoryRepository.findById(id).orElse(null);
+        Category category = this.categoryService.findById(id).orElse(null);
 
         category.setName(categoryBindingModel.getName());
 
-        this.categoryRepository.saveAndFlush(category);
+        this.categoryService.saveAndFlushCategoryData(category);
 
         return "redirect:/admin/categories/";
     }
 
     @GetMapping("/delete/{id}")
     public String delete(Model model, @PathVariable Integer id){
-        if(this.categoryRepository.findById(id).orElse(null) == null){
+        if(this.categoryService.findById(id).orElse(null) == null){
             return "redirect:/admin/categories/";
         }
 
-        Category category = this.categoryRepository.findById(id).orElse(null);
+        Category category = this.categoryService.findById(id).orElse(null);
 
         model.addAttribute("category", category);
         model.addAttribute("view", "admin/category/delete");
@@ -111,17 +113,14 @@ public class CategoryController {
 
     @PostMapping("/delete/{id}")
     public String deleteProcess(@PathVariable Integer id){
-        if(this.categoryRepository.findById(id).orElse(null) == null){
+        if(this.categoryService.findById(id).orElse(null) == null){
             return "redirect:/admin/categories/";
         }
 
-        Category category = this.categoryRepository.findById(id).orElse(null);
+        Category category = this.categoryService.findById(id).orElse(null);
 
-        for(Article article : category.getArticles()){
-            this.articleRepository.delete(article);
-        }
-
-        this.categoryRepository.delete(category);
+        this.articleService.deleteAllArticlesForCategory(category);
+        this.categoryService.deleteCategory(category);
 
         return "redirect:/admin/categories/";
     }

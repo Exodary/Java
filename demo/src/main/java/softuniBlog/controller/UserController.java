@@ -1,6 +1,5 @@
 package softuniBlog.controller;
 
-import org.apache.tomcat.util.http.fileupload.FileUpload;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,49 +13,38 @@ import org.springframework.ui.Model;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.ModelAndView;
-import softuniBlog.Utils.FileUploadUtil;
 import softuniBlog.bindingModel.UserBindingModel;
-import softuniBlog.entity.Article;
 import softuniBlog.entity.ConfirmationToken;
 import softuniBlog.entity.Role;
 import softuniBlog.entity.User;
-import softuniBlog.repository.ArticleRepository;
-import softuniBlog.repository.ConfirmationTokenRepository;
-import softuniBlog.repository.RoleRepository;
-import softuniBlog.repository.UserRepository;
-import softuniBlog.service.EmailSenderService;
+import softuniBlog.service.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
 
 @Controller
 public class UserController {
 
-    @Autowired
-    RoleRepository roleRepository;
+    private final RoleService roleService;
+
+    private final UserService userService;
+
+    private final ConfirmationTokenService confirmationTokenService;
+
+    private final EmailSenderService emailSenderService;
+
+    private final FileService fileService;
 
     @Autowired
-    UserRepository userRepository;
-
-    @Autowired
-    ArticleRepository articleRepository;
-
-    @Autowired
-    ConfirmationTokenRepository confirmationTokenRepository;
-
-    @Autowired
-    EmailSenderService emailSenderService;
+    public UserController(RoleService roleService, UserService userService, ConfirmationTokenService confirmationTokenService,
+                          EmailSenderService emailSenderService, FileService fileService) {
+        this.roleService = roleService;
+        this.userService = userService;
+        this.confirmationTokenService = confirmationTokenService;
+        this.emailSenderService = emailSenderService;
+        this.fileService = fileService;
+    }
 
     @GetMapping("/register")
     public String register(Model model){
@@ -73,41 +61,12 @@ public class UserController {
             return "redirect:/register";
         }
 
-        BCryptPasswordEncoder bCryptPasswordEncoder = new BCryptPasswordEncoder();
+        User user = this.userService.registerUser(userBindingModel.getEmail(),
+                userBindingModel.getFullName(), userBindingModel.getPassword());
 
-        User user = new User(
-                userBindingModel.getEmail(),
-                userBindingModel.getFullName(),
-                bCryptPasswordEncoder.encode(userBindingModel.getPassword())
-        );
+        fileService.saveFile(user, multipartFile);
 
-        String fileName = StringUtils.cleanPath(multipartFile.getOriginalFilename());
-        user.setPhoto(fileName);
-
-        String uploadDir = "user-photos/" + user.getFullName();
-
-        Path uploadPath = Paths.get(uploadDir);
-
-        if(!Files.exists(uploadPath)){
-            Files.createDirectories(uploadPath);
-        }
-        FileUploadUtil.saveFile(uploadDir, fileName, multipartFile);
-
-        try{
-            InputStream inputStream = multipartFile.getInputStream();
-            Path filePath = uploadPath.resolve(fileName);
-            Files.copy(inputStream, filePath, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e){
-
-            throw new IOException("Couldn't save uploaded file: " + fileName);
-        }
-
-
-        Role userRole = this.roleRepository.findByName("ROLE_USER");
-
-        user.addRole(userRole);
-
-        this.userRepository.saveAndFlush(user);
+        this.userService.saveAndFlushUserData(user);
 
         return "redirect:/login";
     }
@@ -138,19 +97,13 @@ public class UserController {
                 .getAuthentication()
                 .getPrincipal();
 
-        User user = this.userRepository.findByEmail(principal.getUsername());
-
-        List<Article> articles = this.articleRepository.findAll();
+        User user = this.userService.findByEmail(principal.getUsername());
 
         model.addAttribute("user", user);
         model.addAttribute("view", "user/profile");
 
         return "base-layout";
     }
-
-    /**
-     * Display the forgot password page and form
-     */
 
     @RequestMapping(value="/forgot-password", method=RequestMethod.GET)
     public String displayResetPassword(Model model, User user) {
@@ -162,21 +115,13 @@ public class UserController {
 
     @RequestMapping(value="/forgot-password", method=RequestMethod.POST)
     public String forgotUserPassword(Model model, User user) {
-        User existingUser = userRepository.findByEmail(user.getEmail());
+        User existingUser = userService.findByEmail(user.getEmail());
         if(existingUser != null) {
-            // create token
             ConfirmationToken confirmationToken = new ConfirmationToken(existingUser);
 
-            // save it
-            confirmationTokenRepository.save(confirmationToken);
+            confirmationTokenService.save(confirmationToken);
 
-            // create the email
-            SimpleMailMessage mailMessage = new SimpleMailMessage();
-            mailMessage.setTo(existingUser.getEmail());
-            mailMessage.setSubject("Complete Password Reset!");
-            mailMessage.setFrom("Satagon123@mail.bg");
-            mailMessage.setText("To complete the password reset process, please click here: "
-                    +"http://localhost:8080/confirm-reset?token="+confirmationToken.getConfirmationToken());
+            SimpleMailMessage mailMessage = emailSenderService.createEmail(existingUser, confirmationToken);
 
             emailSenderService.sendEmail(mailMessage);
 
@@ -194,11 +139,11 @@ public class UserController {
     @RequestMapping(value="/confirm-reset", method= {RequestMethod.GET, RequestMethod.POST})
     public String validateResetToken(Model model, @RequestParam("token")String confirmationToken)
     {
-        ConfirmationToken token = confirmationTokenRepository.findByConfirmationToken(confirmationToken);
+        ConfirmationToken token = confirmationTokenService.findByConfirmationToken(confirmationToken);
 
         if(token != null) {
-            User user = userRepository.findByEmail(token.getUser().getEmail());
-            userRepository.save(user);
+            User user = userService.findByEmail(token.getUser().getEmail());
+            userService.saveAndFlushUserData(user);
             model.addAttribute("user", user);
             model.addAttribute("emailId", user.getEmail());
             model.addAttribute("view", "user/resetPassword");
@@ -214,12 +159,12 @@ public class UserController {
     public String resetUserPassword(Model model, User user) {
 
         if (user.getEmail() != null) {
-            // use email to find user
-            User tokenUser = userRepository.findByEmail(user.getEmail());
+
+            User tokenUser = userService.findByEmail(user.getEmail());
             BCryptPasswordEncoder bCryptPasswordEncoder = new BCryptPasswordEncoder();
             tokenUser.setPassword(bCryptPasswordEncoder.encode(user.getPassword()));
-            // System.out.println(tokenUser.getPassword());
-            userRepository.save(tokenUser);
+
+            userService.saveAndFlushUserData(tokenUser);
             model.addAttribute("message", "Password successfully reset. You can now log in with the new credentials.");
             model.addAttribute("view", "user/successResetPassword");
         } else {

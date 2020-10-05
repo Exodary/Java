@@ -15,10 +15,10 @@ import softuniBlog.entity.Article;
 import softuniBlog.entity.Category;
 import softuniBlog.entity.Tag;
 import softuniBlog.entity.User;
-import softuniBlog.repository.ArticleRepository;
-import softuniBlog.repository.CategoryRepository;
-import softuniBlog.repository.TagRepository;
-import softuniBlog.repository.UserRepository;
+import softuniBlog.service.ArticleService;
+import softuniBlog.service.CategoryService;
+import softuniBlog.service.TagService;
+import softuniBlog.service.UserService;
 
 import java.util.HashSet;
 import java.util.List;
@@ -27,23 +27,32 @@ import java.util.stream.Collectors;
 @Controller
 public class ArticleController {
 
-    @Autowired
-    private ArticleRepository articleRepository;
+
+    private final ArticleService articleService;
+
+
+    private final UserService userService;
+
+
+    private final CategoryService categoryService;
+
+
+    private final TagService tagService;
 
     @Autowired
-    private UserRepository userRepository;
+    public ArticleController(ArticleService articleService, UserService userService, CategoryService categoryService, TagService tagService) {
+        this.articleService = articleService;
+        this.userService = userService;
+        this.categoryService = categoryService;
+        this.tagService = tagService;
+    }
 
-    @Autowired
-    private CategoryRepository categoryRepository;
-
-    @Autowired
-    private TagRepository tagRepository;
 
     @GetMapping("/article/create")
     @PreAuthorize("isAuthenticated()")
     public String create(Model model){
 
-        List<Category> categories = this.categoryRepository.findAll();
+        List<Category> categories = this.categoryService.findAllCategories();
 
         model.addAttribute("categories", categories);
 
@@ -59,19 +68,19 @@ public class ArticleController {
         UserDetails user = (UserDetails) SecurityContextHolder.getContext()
                 .getAuthentication().getPrincipal();
 
-        User userEntity = this.userRepository.findByEmail(user.getUsername());
-        Category category = this.categoryRepository
+        User userEntity = this.userService.findByEmail(user.getUsername());
+        Category category = this.categoryService
                 .findById(articleBindingModel.getCategoryId()).orElse(null);
 
-        HashSet<Tag> tags = this.findTagsFromString(articleBindingModel.getTagString());
+        HashSet<Tag> tags = this.tagService.findTagsFromString(articleBindingModel.getTagString());
 
-        Article articleEntity = new Article(articleBindingModel.getTitle(),
+        Article articleEntity = this.articleService.createArticle(articleBindingModel.getTitle(),
                 articleBindingModel.getContent(),
                 userEntity,
                 category,
                 tags);
 
-        this.articleRepository.saveAndFlush(articleEntity);
+        this.articleService.save(articleEntity);
 
         return "redirect:/";
     }
@@ -79,7 +88,7 @@ public class ArticleController {
     @GetMapping("/article/{id}")
     public String details(Model model, @PathVariable Integer id){
 
-       if(this.articleRepository.findById(id).orElse(null) == null) {
+       if(this.articleService.findById(id).orElse(null) == null) {
            return "redirect:/";
        }
 
@@ -89,12 +98,12 @@ public class ArticleController {
            UserDetails principal = (UserDetails) SecurityContextHolder.getContext()
                    .getAuthentication().getPrincipal();
 
-           User entityUser = this.userRepository.findByEmail(principal.getUsername());
+           User entityUser = this.userService.findByEmail(principal.getUsername());
 
            model.addAttribute("user", entityUser);
        }
 
-        Article article = this.articleRepository.findById(id).orElse(null);
+        Article article = this.articleService.findById(id).orElse(null);
 
         model.addAttribute("article", article);
         model.addAttribute("view", "article/details");
@@ -106,21 +115,19 @@ public class ArticleController {
     @PreAuthorize("isAuthenticated()")
     public String edit(@PathVariable Integer id, Model model){
 
-        if(this.articleRepository.findById(id).orElse(null) == null){
+        if(!this.articleService.articleExist(id)){
             return "redirect:/";
         }
 
-        Article article = this.articleRepository.findById(id).orElse(null);
+        Article article = this.articleService.findById(id).orElse(null);
 
-        if(!isUserAuthorOrAdmin(article)) {
+        if(!articleService.isUserAuthorOrAdmin(article)) {
             return "redirect:/article/" + id;
         }
 
-        List<Category> categories = this.categoryRepository.findAll();
+        List<Category> categories = this.categoryService.findAllCategories();
 
-        String tagString = article.getTags().stream()
-                .map(Tag::getName)
-                .collect(Collectors.joining(", "));
+        String tagString = this.tagService.listAllTagsForArticle(article);
 
         model.addAttribute("view", "article/edit");
         model.addAttribute("article", article);
@@ -134,27 +141,25 @@ public class ArticleController {
     @PreAuthorize("isAuthenticated()")
     public String editProcess(@PathVariable Integer id, ArticleBindingModel articleBindingModel){
 
-        if(this.articleRepository.findById(id).orElse(null) == null){
+        if(!this.articleService.articleExist(id)){
             return "redirect:/";
         }
 
-        Article article = this.articleRepository.findById(id).orElse(null);
+        Article article = this.articleService.findById(id).orElse(null);
 
-        if(!isUserAuthorOrAdmin(article)) {
+        if(!articleService.isUserAuthorOrAdmin(article)) {
             return "redirect:/article/" + id;
         }
 
-        Category category = this.categoryRepository
+        Category category = this.categoryService
                 .findById(articleBindingModel.getCategoryId()).orElse(null);
 
-        HashSet<Tag> tags = this.findTagsFromString(articleBindingModel.getTagString());
+        HashSet<Tag> tags = this.tagService.findTagsFromString(articleBindingModel.getTagString());
 
-        article.setContent(articleBindingModel.getContent());
-        article.setTitle(articleBindingModel.getTitle());
-        article.setCategory(category);
-        article.setTags(tags);
+        this.articleService.editArticle(article, articleBindingModel.getTitle(),
+                articleBindingModel.getContent(), category, tags);
 
-        this.articleRepository.saveAndFlush(article);
+        this.articleService.save(article);
 
         return "redirect:/article/" + article.getId();
     }
@@ -163,13 +168,13 @@ public class ArticleController {
     @PreAuthorize("isAuthenticated()")
     public String delete(Model model, @PathVariable Integer id){
 
-        if(this.articleRepository.findById(id).orElse(null) == null){
+        if(!this.articleService.articleExist(id)){
             return "redirect:/";
         }
 
-        Article article = this.articleRepository.findById(id).orElse(null);
+        Article article = this.articleService.findById(id).orElse(null);
 
-        if(!isUserAuthorOrAdmin(article)) {
+        if(!articleService.isUserAuthorOrAdmin(article)) {
             return "redirect:/article/" + id;
         }
 
@@ -182,46 +187,18 @@ public class ArticleController {
     @PostMapping("/article/delete/{id}")
     @PreAuthorize("isAuthenticated()")
     public String deleteProcess(@PathVariable Integer id) {
-        if (this.articleRepository.findById(id).orElse(null) == null) {
+        if (!this.articleService.articleExist(id)) {
             return "redirect:/";
         }
 
-        Article article = this.articleRepository.findById(id).orElse(null);
+        Article article = this.articleService.findById(id).orElse(null);
 
-        if(!isUserAuthorOrAdmin(article)) {
+        if(!this.articleService.isUserAuthorOrAdmin(article)) {
             return "redirect:/article/" + id;
         }
 
-        this.articleRepository.delete(article);
+        this.articleService.deleteArticle(article);
 
         return "redirect:/";
-    }
-
-    private boolean isUserAuthorOrAdmin(Article article){
-        UserDetails user = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-
-        User userEntity = this.userRepository.findByEmail(user.getUsername());
-
-        return userEntity.isAdmin() || userEntity.isAuthor(article);
-    }
-
-    private HashSet<Tag> findTagsFromString(String tagString){
-
-        HashSet<Tag> tags = new HashSet<>();
-
-        String[] tagNames = tagString.split(",\\s*");
-
-        for(String tagName : tagNames){
-            Tag currentTag = this.tagRepository.findByName(tagName);
-
-            if(currentTag == null){
-                currentTag = new Tag(tagName);
-                this.tagRepository.saveAndFlush(currentTag);
-            }
-
-            tags.add(currentTag);
-        }
-
-        return tags;
     }
 }

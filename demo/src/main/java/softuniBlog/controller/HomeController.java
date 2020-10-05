@@ -8,8 +8,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import softuniBlog.entity.Article;
 import softuniBlog.entity.Category;
-import softuniBlog.repository.ArticleRepository;
-import softuniBlog.repository.CategoryRepository;
+import softuniBlog.service.CategoryService;
 
 import java.util.List;
 import java.util.Set;
@@ -17,13 +16,18 @@ import java.util.Set;
 @Controller
 public class HomeController {
 
+
+    private final CategoryService categoryService;
+
     @Autowired
-    private CategoryRepository categoryRepository;
+    public HomeController(CategoryService categoryService) {
+        this.categoryService = categoryService;
+    }
 
     @GetMapping("/")
     public String index(Model model){
 
-        List<Category> categories = this.categoryRepository.findAll();
+        List<Category> categories = this.categoryService.findAllCategories();
 
         model.addAttribute("view", "home/index");
         model.addAttribute("categories", categories);
@@ -40,11 +44,11 @@ public class HomeController {
 
     @GetMapping("/category/{id}")
     public String listArticles(Model model, @PathVariable Integer id){
-        if(this.categoryRepository.findById(id).orElse(null) == null){
+        if(this.categoryService.findById(id).orElse(null) == null){
             return "redirect:/";
         }
 
-        Category category = this.categoryRepository.findById(id).orElse(null);
+        Category category = this.categoryService.findById(id).orElse(null);
         Set<Article> articles = category.getArticles();
 
 

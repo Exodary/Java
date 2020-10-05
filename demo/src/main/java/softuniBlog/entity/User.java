@@ -122,7 +122,4 @@ public class User {
         return "/user-photos/" + fullName + "/" + photo;
     }
 
-/*    @Transient
-    public Integer getArticleIdFromAuthor(Set<Article> articles) { return articles.;}*/
-
 }

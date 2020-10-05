@@ -9,14 +9,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import softuniBlog.bindingModel.UserBindingModel;
 import softuniBlog.bindingModel.UserEditBindingModel;
 import softuniBlog.entity.Article;
 import softuniBlog.entity.Role;
 import softuniBlog.entity.User;
-import softuniBlog.repository.ArticleRepository;
-import softuniBlog.repository.RoleRepository;
-import softuniBlog.repository.UserRepository;
+import softuniBlog.service.ArticleService;
+import softuniBlog.service.RoleService;
+import softuniBlog.service.UserService;
 
 import java.util.HashSet;
 import java.util.List;
@@ -26,18 +25,22 @@ import java.util.Set;
 @RequestMapping("/admin/users")
 public class AdminUserController {
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserService userService;
+
+    private final ArticleService articleService;
+
+    private final RoleService roleService;
 
     @Autowired
-    private ArticleRepository articleRepository;
-
-    @Autowired
-    private RoleRepository roleRepository;
+    public AdminUserController(UserService userService, ArticleService articleService, RoleService roleService) {
+        this.userService = userService;
+        this.articleService = articleService;
+        this.roleService = roleService;
+    }
 
     @GetMapping("/")
     public String listUsers(Model model){
-        List<User> users = this.userRepository.findAll();
+        List<User> users = this.userService.findAllUser();
 
         model.addAttribute("users", users);
         model.addAttribute("view", "admin/user/list");
@@ -47,12 +50,12 @@ public class AdminUserController {
 
     @GetMapping("/edit/{id}")
     public String edit(@PathVariable Integer id, Model model){
-        if(this.userRepository.findById(id).orElse(null) == null){
+        if(this.userService.findUserById(id).orElse(null) == null){
             return "redirect:/admin/users/";
         }
 
-        User user = this.userRepository.findById(id).orElse(null);
-        List<Role> roles = this.roleRepository.findAll();
+        User user = this.userService.findUserById(id).orElse(null);
+        List<Role> roles = this.roleService.findAllRoles();
 
         model.addAttribute("user", user);
         model.addAttribute("roles", roles);
@@ -64,46 +67,38 @@ public class AdminUserController {
     @PostMapping("/edit/{id}")
     public String editProcess(@PathVariable Integer id, UserEditBindingModel userBindingModel){
 
-        if(this.userRepository.findById(id).orElse(null) == null){
+        if(this.userService.findUserById(id).orElse(null) == null){
             return "redirect:/admin/users/";
         }
 
-        User user = this.userRepository.findById(id).orElse(null);
+        User user = this.userService.findUserById(id).orElse(null);
 
         if(!StringUtils.isEmpty(userBindingModel.getPassword())
         && !StringUtils.isEmpty(userBindingModel.getConfirmPassword())){
 
-            if(userBindingModel.getPassword().equals(userBindingModel.getConfirmPassword())){
-
-                BCryptPasswordEncoder bCryptPasswordEncoder = new BCryptPasswordEncoder();
-
-                user.setPassword(bCryptPasswordEncoder.encode(userBindingModel.getPassword()));
+            if(userService.passwordsAreEqual(userBindingModel.getPassword(), userBindingModel.getConfirmPassword())){
+                this.userService.setEncodedPassword(user, userBindingModel.getPassword());
+            }
+            else{
+                return "redirect:/admin/users/";
             }
         }
 
-        user.setFullName(userBindingModel.getFullName());
-        user.setEmail(userBindingModel.getEmail());
+        this.userService.editUser(user, userBindingModel.getEmail(), userBindingModel.getFullName(),
+                userBindingModel.getRoles());
 
-        Set<Role> roles = new HashSet<>();
-
-        for(Integer roleId : userBindingModel.getRoles()){
-            roles.add(this.roleRepository.findById(roleId).orElse(null));
-        }
-
-        user.setRoles(roles);
-
-        this.userRepository.saveAndFlush(user);
+        this.userService.saveAndFlushUserData(user);
 
         return "redirect:/admin/users/";
     }
 
     @GetMapping("/delete/{id}")
     public String delete(@PathVariable Integer id, Model model){
-        if(this.userRepository.findById(id).orElse(null) == null){
+        if(this.userService.findUserById(id).orElse(null) == null){
             return "redirect:/admin/users/";
         }
 
-        User user = this.userRepository.findById(id).orElse(null);
+        User user = this.userService.findUserById(id).orElse(null);
 
         model.addAttribute("user", user);
         model.addAttribute("view", "admin/user/delete");
@@ -113,17 +108,15 @@ public class AdminUserController {
 
     @PostMapping("/delete/{id}")
     public String deleteProcess(@PathVariable Integer id){
-        if(this.userRepository.findById(id).orElse(null) == null){
+        if(this.userService.findUserById(id).orElse(null) == null){
             return "redirect:/admin/users/";
         }
 
-        User user = this.userRepository.findById(id).orElse(null);
+        User user = this.userService.findUserById(id).orElse(null);
 
-        for(Article article : user.getArticles()){
-            this.articleRepository.delete(article);
-        }
+       this.articleService.deleteAllArticlesForUser(user);
 
-        this.userRepository.delete(user);
+        this.userService.deleteUser(user);
 
         return "redirect:/admin/users/";
     }
