@@ -15,14 +15,15 @@ public class UserBindingModel {
     @NotNull
     private String confirmPassword;
 
-    @NotNull
-    private String photo;
 
-    public String getPhoto() {
+    @NotNull
+    private Byte[] photo;
+
+    public Byte[] getPhoto() {
         return photo;
     }
 
-    public void setPhoto(String photo) {
+    public void setPhoto(Byte[] photo) {
         this.photo = photo;
     }
 

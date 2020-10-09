@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import softuniBlog.entity.User;
+import softuniBlog.repository.UserRepository;
 import softuniBlog.service.serviceInt.FileServiceInt;
 
 import java.io.IOException;
@@ -16,26 +17,33 @@ import java.nio.file.StandardCopyOption;
 @Service
 public class FileService implements FileServiceInt {
 
+
+    private final UserRepository userReposity;
+
+    public FileService(UserRepository userReposity) {
+        this.userReposity = userReposity;
+    }
+
     @Override
     public void saveFile(User user, MultipartFile multipartFile) throws IOException {
+        try {
 
-        String fileName = StringUtils.cleanPath(multipartFile.getOriginalFilename());
+            Byte[] byteObjects = new Byte[multipartFile.getBytes().length];
 
-        user.setPhoto(fileName);
+            int i = 0;
 
-        String uploadDir = "user-photos/" + user.getFullName();
+            for (byte b : multipartFile.getBytes()){
+                byteObjects[i++] = b;
+            }
 
-        Path uploadPath = Paths.get(uploadDir);
+            user.setPhoto(byteObjects);
 
-        if (!Files.exists(uploadPath)) {
-            Files.createDirectories(uploadPath);
-        }
+            userReposity.save(user);
+        } catch (IOException e) {
+            //todo handle better
+            System.out.println("Error occurred");
 
-        try (InputStream inputStream = multipartFile.getInputStream()) {
-            Path filePath = uploadPath.resolve(fileName);
-            Files.copy(inputStream, filePath, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException ioe) {
-            throw new IOException("Could not save image file: " + fileName, ioe);
+            e.printStackTrace();
         }
     }
 }

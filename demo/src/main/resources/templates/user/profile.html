@@ -7,7 +7,7 @@
                     <br/>
                     <span th:text="${user.fullName}"></span>
                     <br/>
-                    <span><img th:src="@{${user.photosImagePath}}" /></span>
+                    <span><img th:src="'data:image/jpeg;base64,' + ${user.getImgData(user.getPhoto())}" /></span>
                     <br/>
                     <div class="row">
                         <th:block th:each="article : ${user.getArticles()}">

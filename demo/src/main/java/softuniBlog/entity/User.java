@@ -1,6 +1,7 @@
 package softuniBlog.entity;
 
 import javax.persistence.*;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -86,14 +87,15 @@ public class User {
         this.articles = articles;
     }
 
-    @Column(name = "photo", nullable = false)
-    private String photo;
+    @Lob
+    @Column(name = "photo", nullable = false, columnDefinition="text")
+    private Byte[] photo;
 
-    public String getPhoto() {
+    public Byte[] getPhoto() {
         return photo;
     }
 
-    public void setPhoto(String photo) {
+    public void setPhoto(Byte[] photo) {
         this.photo = photo;
     }
 
@@ -120,6 +122,10 @@ public class User {
         if (photo == null || fullName == null) return null;
 
         return "/user-photos/" + fullName + "/" + photo;
+    }
+
+    public String getImgData(byte[] byteData) {
+        return Base64.getMimeEncoder().encodeToString(byteData);
     }
 
 }
